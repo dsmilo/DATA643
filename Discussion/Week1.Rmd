@@ -1,0 +1,73 @@
+---
+title: 'Discussion 1: Scenario Design'
+author: "Dan Smilowitz"
+date: "June 15, 2016"
+output:
+  html_document:
+    theme: flatly
+---
+
+
+```{r setup, include=FALSE, cache=FALSE}
+library(knitr)
+# additional packages used throughout
+library(ggplot2)
+library(dplyr)
+
+## set global chunk options
+opts_chunk$set(fig.path='figure/manual-', cache.path='cache/manual-', fig.align='center', fig.show='hold', par=TRUE)
+
+## tune details of base graphics (http://yihui.name/knitr/hooks)
+knit_hooks$set(par=function(before, options, envir){
+if (before && options$fig.show!='none') par(mar=c(4,4,.2,.1),cex.lab=.95,cex.axis=.9,mgp=c(2,.7,0),tcl=-.3)
+})
+
+## additional chunk options
+opts_chunk$set(warning=FALSE, message=FALSE, comment=NA, fig.retina=1)
+```
+
+I am investigating the recommender system that powers [Pandora](http://www.pandora.com).  I've personally migrated Spotify's Discover Weekly as my source for music discovery, but the longer history Pandora's music recommendation services interests me.
+
+
+## Scenario Design Analysis
+
+For the organization:
+
+1.  Who are your target users?
+    * The target users are individuals seeking to listen to music online.
+
+2.  What are their key goals?
+    * Listen to music online
+    * Discover new music
+
+3.  How can you help them accomplish those goals?
+    * Provide music similar to users' tastes
+    * Allow user feedback to refine recommendations
+
+
+Because the users are individuals who will not have target users affected by this recommender system, a scenario design for the site's users is not performed.
+
+
+## Reverse Engineering
+
+Pandora's is driven by the _Music Genome Project_, which Pandora claims is "the most comprehensive analysis of music ever undertaken."  Per the [About](http://www.pandora.com/about/mgp) page for this project,
+
+> Each song in the Music Genome Project is analyzed using up to 450 distinct musical characteristics by a trained music analyst. These attributes capture not only the musical identity of a song, but also the many significant qualities that are relevant to understanding the musical preferences of listeners.
+
+Based on this description, it seems likely that Pandora's recommender system is based on a hybrid system utilizing both item-based collaborative filtering and content-based filtering.
+
+When a new user visits Pandora, they are asked to create a 'station' which will play music similar to the song, album, or artist entered.  This initial setup of a station relies on content-based filtering -- the currently-playing song has an option to view an explanation of "Why was this track selected?"  An example of such an explanation (for the song that played when I logged in to the site) is as follows:
+
+> Based on what you've told us so far, we're playing this track because it features hardcore rap influence, club rap influences, four-on-the-floor beats, east coast rap influences and electronica influences.
+
+Users are offered the opportunity to register for an account with Pandora, after which they can save their created station(s) for later access.  It is possible to add additional songs, albums, or artists to the station, which will provide additional features on which the system can provide recommendations.
+
+As songs are played, users are given the opportunity (but not required) to give songs played a 'thumbs up' or 'thumbs down.'  These ratings can be used to influence the future recommendations of the system.  The ratings can influence the content-based filtering, as well as providing data that can inform item-based collaborative filtering.
+
+
+## Recommendations
+The existing model could be improved in two major ways: refining the data used for item-based collaborative filtering; and introducing an element of user-based collaborative filtering.
+
+The current item-based collaborative filtering relies only on ratings of thumbs down (-1) or thumbs up (+1).  Changing to a more detailed system (such as a five-star system) would allow for more advanced recommendations.  In order to ensure that users continue to participate in rating at a rate similar to the current reaction, this five-star sytem could be presented after a thumbs up or thumbs down has been presented -- for example, clicking thumbs down or up could result in displaying a two- or four-star (respectively) rating that users could then modify -- this would allow for more-refined ratings for users willing to provide them, but continue to provide the same level of granularity as the current system if users do not rate on the five-star scale.
+
+Pandora could implement user-based collaborative filtering to identify similar users and present users with stations created by users with similar preferences as them.  Further, implementing social media into the platform and allowing identification of, for example, Facebook friends, would allow for more-refined user-based collaborative filtering by providing weights to existing friends.  Additionally, this inclusion could allow for the implementation of graph databases in the analysis.
