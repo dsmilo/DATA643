@@ -8,24 +8,6 @@ output:
 ---
 
 
-```{r setup, include=FALSE, cache=FALSE}
-library(knitr)
-# additional packages used throughout
-library(ggplot2)
-library(dplyr)
-
-## set global chunk options
-opts_chunk$set(fig.path='figure/manual-', cache.path='cache/manual-', fig.align='center', fig.show='hold', par=TRUE)
-
-## tune details of base graphics (http://yihui.name/knitr/hooks)
-knit_hooks$set(par=function(before, options, envir){
-if (before && options$fig.show!='none') par(mar=c(4,4,.2,.1),cex.lab=.95,cex.axis=.9,mgp=c(2,.7,0),tcl=-.3)
-})
-
-## additional chunk options
-opts_chunk$set(warning=FALSE, message=FALSE, comment=NA, fig.retina=1)
-```
-
 I am investigating the recommender system that powers [Pandora](http://www.pandora.com).  I've personally migrated Spotify's Discover Weekly as my source for music discovery, but the longer history Pandora's music recommendation services interests me.
 
 
