@@ -1,0 +1,188 @@
+---
+title: 'DATA 643 Project 1: Coding a Recommender System'
+author: "Dan Smilowitz"
+date: "June 19, 2016"
+output: 
+  html_document: 
+    highlight: tango
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, comment=NA, fig.align='center')
+```
+
+## Motivation
+The purpose of this exercise is to hand-code a recommender system, including the creation of a similarity function.  The results of the hand-coded system are compared with the evaluation of the same model using an R package -- in this case `recommenderlab`.
+
+### Data Utilized
+To allow for ease of comparison between models, the `Jester5k` dataset from the `recommenderlab` package is utilized for the recommender system.  According to the help file, the dataset includes "5000 users from the anonymous ratings data from the Jester Online Joke Recommender System."  The ratings contained in the data frame range between -10.00 and 10.00.  Each user included has rated at least 36 jokes.
+
+The dataset is stored as an item of class `realRatingMatrix`; it is converted to a data frame for use in the hand-coded system.
+
+```{r read-data}
+library(recommenderlab)
+data(Jester5k)
+jester <- as.vector(Jester5k@data)
+jester <- matrix(data = jester, nrow = Jester5k@data@Dim[1], ncol = Jester5k@data@Dim[2])
+jester <- as.data.frame(jester)
+rownames(jester) <- Jester5k@data@Dimnames[[1]]
+names(jester) <- Jester5k@data@Dimnames[[2]]
+```
+
+
+## System Creation
+The goal of the recommender system will be to provide 5 recommended jokes per user for the first twenty users in the dataset.  Based on the information available and the dimensions of the dataset, **item-based collaborative filtering** will be utilized.  Similarities will be calculated using the **cosine** method.
+
+### Similarity Function
+In order to provide recommendations in an item-based collaborative filtering system, the similarities between items must be computed and saved into a matrix.  For two vectors (representing the ratings assinged to a joke in this case), the cosine distance is given by the dot product of the matrices divided by the product of their norms.  Because the `norm` function of the `Matrix` does not handle vectors, a custom function is created, with handling for potential `NA` values accounted for:
+
+```{r similarity-function}
+vec_similarity <- function(v1, v2) {
+  dot_product <- sum(v1 * v2, na.rm = TRUE)
+  norm1 <- sqrt(sum(v1^2, na.rm = TRUE))
+  norm2 <- sqrt(sum(v2^2, na.rm = TRUE))
+  dot_product / (norm1 * norm2)
+}
+```
+
+## System Utilization
+With the necessary similarity function created, the model is implemented.
+
+### Mean-Centering
+In order to evaluate the item-item similarities, the ratings provided by users must be mean-centered so that their ratings are viewed relative to their own average ratings.  In order to do this, the mean for each user (represented by a row in the dataset) must be calculated, and this mean must be subtracted from the rating.  Since non-rated jokes are represented by values of 0, these values must be replaced by `NA`s to avoid biasing the mean towards zero.  The original `Jester5k` dataset contains no ratings of exactly 0.00, so this step does not lead to the loss of any information.
+
+```{r mean-centering}
+jester[jester == 0] <- NA
+user_means <- rowMeans(jester, na.rm = TRUE)
+for (i in 1:nrow(jester)) {
+  jester[i, ] <- jester[i, ] - user_means[i]
+}
+```
+
+### Creating the Similarity Matrix
+The similarity matrix for the 100 jokes is created using the mean-centered data and the similarity function.
+
+```{r similarity-matrix}
+item_sim <- data.frame(matrix(NA, nrow = ncol(jester), ncol = ncol(jester)))
+for (i in 1:nrow(item_sim)) {
+  for(j in 1:ncol(item_sim)) {
+    item_sim[i, j] <- vec_similarity(jester[, i], jester[, j])
+  }
+}
+names(item_sim) <- names(jester) -> rownames(item_sim)
+image(as.matrix(item_sim), axes = FALSE)
+```
+
+The similarity matrix shows a wide range of similarity -- the similarities (not including the diagonal with similarity = 1) range from -0.378 to 0.478.
+
+### Running the Model
+In order to prepare the model, a subset of the `jester` dataset is utilized.  Users with fewer than 20 unrated jokes are removed so that the recommendations are meaningful (the five best recommendations for someone who has rated all but five jokes will be the remaining five jokes, regardless of if the user is expected to like them).  For the first twenty users in this new dataset, a predicted rating for each unrated joke is produced using the twenty most similar jokes.  Of these unrated jokes, the five jokes with the highest predicted ratings are returned.
+
+```{r manual-system}
+library(dplyr)
+
+jester_rec <- subset(jester, rowSums(is.na(jester)) > 20)
+
+manual_recs <- data.frame(matrix(nrow = 0, ncol = 5))
+for (i in 1:20) {
+  joke_name <- character(0)
+  joke_guess <- numeric(0)
+  for (j in 1:ncol(jester_rec)){
+    if(is.na(jester_rec[i, j])) {
+      joke_name <- c(joke_name, names(item_sim)[j])
+      # locate max similarities for item
+      sims <- item_sim[, j]
+      sims_df <- data.frame(joke = names(item_sim), sims, stringsAsFactors = FALSE)
+      sims_df <- sims_df %>% filter(joke != names(item_sim)[j]) %>% arrange(desc(sims)) %>% top_n(20)
+      # get predicted rating
+      pred <- NULL
+      for (k in 1:20) {
+        pred <- sum(pred, sims_df$sims[k] * jester_rec[i, sims_df$joke[k]], na.rm = TRUE)
+      }
+      joke_guess <- c(joke_guess, pred / sum(sims_df$sims, na.rm = TRUE))
+    }
+  }
+  best_jokes <- data.frame(joke_name, joke_guess, stringsAsFactors = FALSE)
+  best_jokes <- best_jokes %>% arrange(desc(joke_guess))
+  for (n in 1:5) {
+    manual_recs[i, n] <- best_jokes$joke_name[n]
+  }
+  rownames(manual_recs)[i] <- rownames(jester_rec)[i]
+}
+names(manual_recs) <- as.character(1:5)
+```
+
+### Results
+The five jokes for the first twenty users are presented below:
+
+`r kable(manual_recs)`
+
+The most-recommended jokes are presented below:
+
+```{r manual-top, echo=FALSE}
+manual_all <- data.frame(unlist(unlist(manual_recs)), stringsAsFactors = FALSE)
+names(manual_all) <- "Joke"
+manual_top  <- manual_all %>% count(Joke) %>% arrange(desc(n)) %>% top_n(5)
+kable(manual_top, padding = 0)
+```
+
+## Prepackaged System
+The recommender systems in the `recommenderlab` package automatically mean-center data and calculate similarities (using the specified method).  Many of the functions in the package take inputs of the class `realRatingMatrix` -- for this reason, the raw `Jester5k` dataset from the package is utilized.
+
+### Creating the Model
+The model (including similarity matrix) is created using the full dataset.  Arguments to the function are set to match those used in the manually-created model.
+
+```{r premade-model}
+premade_model <- Recommender(data = Jester5k, method = "IBCF", parameter = list(method = "Cosine", k = 20))
+```
+
+### Applying the Model
+The model is then applied to the dataset to obtain five recommendations each for the first twenty users.  Here, the dataset is again subsetted to exclude those with fewer than 20 unrated jokes.
+```{r premade-run}
+Jester5k_rec <- Jester5k[100 - rowCounts(Jester5k) > 20]
+premade_allrecs <- predict(object = premade_model, newdata = Jester5k_rec, n = 5)
+```
+
+### Results
+The five recommendations for the first twenty users are returned:
+```{r premade_recs}
+premade_recs <- data.frame(matrix(nrow = 20, ncol = 5))
+rownames(premade_recs) <- names(premade_allrecs@items)[1:20]
+for(i in 1:20) {
+  for (j in 1:5) {
+    premade_recs[i, j] <- paste0("j", premade_allrecs@items[[i]][j])
+  }
+}
+names(premade_recs) <- as.character(1:5)
+```
+
+`r kable(premade_recs)`
+
+The most-recommended jokes are presented below:
+
+```{r premade-top, echo=FALSE}
+premade_all <- data.frame(unlist(unlist(premade_recs)), stringsAsFactors = FALSE)
+names(premade_all) <- "Joke"
+premade_top  <- premade_all %>% count(Joke) %>% arrange(desc(n)) %>% top_n(5)
+kable(premade_top, padding = 0)
+```
+
+## Comparison
+The top five suggested jokes by both models share 3 jokes, sharing the most-recommended joke, `j89`:
+
+> A radio conversation of a US naval ship with Canadian authorities ... Americans: Please divert your course 15 degrees to the North to avoid a collision. Canadians: Recommend you divert YOUR course 15 degrees to the South to avoid a collision. Americans: This is the Captain of a US Navy ship. I say again, divert YOUR course. Canadians: No. I say again, you divert YOUR course. Americans: This is the aircraft carrier USS LINCOLN, the second largest ship in the United States' Atlantic Fleet. We are accompanied by three destroyers, three cruisers and numerous support vessels. I demand that you change your course 15 degrees north, that's ONE FIVE DEGREES NORTH, or counter-measures will be undertaken to ensure the safety of this ship. Canadians: This is a lighthouse. Your call.
+
+Of the 20 users evaluated, roughly 65% have three or four recommendations common to both models.  One user had zero matching recommendations; zero users had fully matched recommendations.  These results are presented in the histogram below:
+
+```{r compare, echo=FALSE}
+same <- NULL
+for (i in 1:20){
+  same <- c(same,sum(manual_recs[i, ] %in% premade_recs[i, ]))
+}
+library(ggplot2)
+hist(same, breaks = -1:5, freq = FALSE, main="Number of Matching Recommendation")
+```
+
+The manual model completed in just over 60 seconds; the prebuilt model completed in 2.75 seconds.  This significant difference in time indicates that the recommendation system included in `recommenderlab` is likely the more useful model.  It also contains other filtering techniques, which could be implemented and tested for precision without the need to build additional models.
