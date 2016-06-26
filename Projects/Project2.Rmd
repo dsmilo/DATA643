@@ -1,0 +1,130 @@
+---
+title: 'DATA 607 Project 2: System Evaluation'
+author: "Dan Smilowitz"
+date: "June 24, 2016"
+output: 
+  html_document: 
+    highlight: tango
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(message=FALSE, warning=FALSE, comment=NA, fig.align = 'center')
+```
+
+
+## Motivation
+The purpose of this exercise is to build multiple recommender systems for the same dataset and evaluate their performance.  By applying the system to a testing subset of the data, the accuracy of the various models can be compared.
+
+
+### Data Utilized
+The `recommenderlab` package is utilized throughout the exercise.  The `Jester5k` dataset included in the package is the rating matrix on which the various models are evaluated.  The dataset includes "5000 users from the anonymous ratings data from the Jester Online Joke Recommender System."  The ratings contained in the data frame range between -10.00 and 10.00.
+
+```{r load-data, echo=FALSE}
+library(recommenderlab)
+data(Jester5k, package = "recommenderlab")
+```
+
+The dataset is not very sparse -- each user included has rated at least 36 jokes, with some users having rated all 100 jokes sampled in the dataset.  To create some sparsity and better allow for recommendations, a subset of the dataset containing only those users with at least 20 un-rated jokes is considered.
+
+```{r subset}
+Jester5k_rec <- Jester5k[100 - rowCounts(Jester5k) > 20]
+```
+
+
+## Creating the Systems
+
+### Data Normalization
+Naturally, users have different behaviors when rating items; this will be reflected in their average rating, as displayed below.
+
+```{r user-averages, echo=FALSE}
+library(ggplot2)
+qplot(rowMeans(Jester5k_rec), binwidth = 0.5, alpha = 0.5, col = 2) + theme(legend.position = 'none')
+```
+
+In order to remove any bias from different users' average ratings, the ratings are normalized so that each user has an average rating of 0.
+
+
+### Data Splitting
+To evaluate the accuracy of the models created, the dataset is split into training and testing sets.  This is accomplished using the built-in`evaluationScheme` function.  80% of the data is included in the training set, with the remaining 20% in the testing dataset.  With the sparsity introduced in the previous section, 20 items are given for evaluation.  For accuracy evaluation purposes, a threshold defining a "good" rating must be created. Given the normalization above, the threshold is set at 0.1, indicating jokes that users like more than their average rating.
+
+```{r data-split}
+Jester5k_rec <- normalize(Jester5k_rec)
+train_test <- evaluationScheme(data = Jester5k_rec, method = "split", train = 0.8, given = 20, goodRating = 0.1)
+```
+
+### Models Considered
+Adapting the example in *Building a Recommendation System with R*, models are evaluated.  Two algorithms are used:
+  - User-based collaborative filtering (UBCF)
+  - Item-based collaboriatve filtering (IBCF)
+
+Two similarity methods are used for each algorithm:
+  - Cosine similarity
+  - Pearson correllation similarity
+
+```{r models}
+models <- list(
+  UBCF_cos = list(name = "UBCF", param = list(method = "cosine")), 
+  IBCF_cos = list(name = "IBCF", param = list(method = "cosine")),
+  UBCF_cor = list(name = "UBCF", param = list(method = "pearson")),
+  IBCF_cor = list(name = "IBCF", param = list(method = "pearson")))
+```
+
+### Model Evaluation
+Each of the four models is evaluated using for the test dataset, with each model providing 1 to 20 recommendations per user.
+```{r evaluate}
+eval_results <- evaluate(x = train_test, method = models, n = 1:20)
+```
+
+
+## Model Comparison
+In addition to accuracy, the models are compared based on time.  The time (in seconds) to create the model and execute the prediction for each of the models is presented in the table below:
+
+```{r time, echo=FALSE}
+time <- data.frame(Cosine = c(0 + 22.5, 1.29 + 0.15), Pearson = c(0 + 40.69, 2.45 + 0.14), row.names = c("UBCF", "IBCF"))
+kable(time, padding = 0)
+```
+
+These times show that the execution of the user-based collaborative filtering models takes significantly longer than the evaluation of the item-based collaborative filtering models.  This makes sense given the dimensions of the dataset used -- `r nrow(Jester5k_rec)` users vs. `r ncol(Jester5k_rec)` items.  It is necessary to view the accuracy of the generated models to determine if the computational expense of the user-based models is worthwhile.
+
+### Accuracy
+The average confusion matrix for each model is extracted at each number of recommendations for each model.
+```{r results}
+model_performance <- lapply(eval_results, avg)
+```
+
+The results are presented below:
+
+#### User-Based, Cosine
+`r kable(cbind(1:20, model_performance$UBCF_cos[, 5:8]), digits = 2, padding = 0)`
+
+#### Item-Based, Cosine
+`r kable(cbind(1:20, model_performance$IBCF_cos[, 5:8]), digits = 2, padding = 0)`
+
+#### User-Based, Pearson
+`r kable(cbind(1:20, model_performance$UBCF_cor[, 5:8]), digits = 2, padding = 0)`
+
+#### Item-Based, Pearson
+`r kable(cbind(1:20, model_performance$IBCF_cor[, 5:8]), digits = 2, padding = 0)`
+
+### Performance
+ROC and Precision-Recall charts are provided for the four models:
+
+```{r charts, echo=FALSE}
+model_gg <- data.frame(rbind(model_performance$UBCF_cos[, 5:8], model_performance$IBCF_cos[, 5:8], model_performance$UBCF_cor[, 5:8], model_performance$IBCF_cor[, 5:8]))
+model_gg$Model <- as.factor(c(rep("UBCF_cos", 20), rep("IBCF_cos", 20), rep("UBCF_cor", 20), rep("IBCF_cor", 20)))
+ggplot(model_gg, aes(x = recall, y = precision, col = Model)) + geom_line() + geom_point() + theme(legend.position = "bottom") + ggtitle("Precision-Recall Curves\n")
+ggplot(model_gg, aes(x = FPR, y = TPR, col = Model)) + geom_line() + geom_point() + theme(legend.position = "bottom") + ggtitle("ROC Curves\n")
+```
+
+## Conclusions
+The performance charts above both clearly indicate that the two user-based collaborative filtering models perform better than the item-based collaborative filtering models based on the area under the curves.  Based on the clear improvement in performance, the computational expense is likely worthwhile.  To investigate the difference in performance between similarity methods, zoomed-in performance charts are created:
+
+```{r UBCF-charts, echo=FALSE}
+UBCF_gg <- subset(model_gg, grepl("UBCF", Model))
+ggplot(UBCF_gg, aes(x = recall, y = precision, col = Model)) + geom_line() + geom_point() +  theme(legend.position = "bottom") + ggtitle("Precision-Recall Curves\n")
+ggplot(UBCF_gg, aes(x = FPR, y = TPR, col = Model)) + geom_line() + geom_point() + theme(legend.position = "bottom") + ggtitle("ROC Curves\n")
+```
+
+The area under the curves for the two models are nearly indistinguishable.  The computational expense of the model using Pearson correlation similarity does not provide any significant increase in performance; therefore the **user-based collaborative filtering model with cosine similarity provides the best performance for the computational expense.**
