@@ -1,0 +1,263 @@
+---
+title: "DATA 643 Project 3: Singular Value Decomposition"
+author: "Dan Smilowitz"
+date: "July 3, 2016"
+output: 
+  html_document: 
+    highlight: tango
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, comment=NA, fig.align='center')
+```
+
+## Motivation
+The purpose of this exercise is to implement the singular value decomposition (SVD) matrix factorization method in the context of a recommender system.  This is implemented in two ways:
+
+  * Using SVD to estimate similarity
+  * Using SVD to create a content-based recommender
+
+### Data Utilized
+The `recommenderlab` package is utilized throughout the exercise.  The `Jester5k` dataset included in the package is the rating matrix on which the various models are evaluated.  The dataset includes "5000 users from the anonymous ratings data from the Jester Online Joke Recommender System."  The ratings contained in the data frame range between -10.00 and 10.00.
+
+```{r load-data, echo=FALSE}
+library(recommenderlab)
+data(Jester5k, package = "recommenderlab")
+```
+
+
+## SVD Concepts
+Singular Value Decomposition begins by breaking an $M$ by $N$ matrix $A$ (in this case $M$ users and $N$ jokes) into the product of three matrices: $U$, which is $M$ by $M$, $\Sigma$, which is $M$ by $N$, and $V^T$, which is $N$ by $N$:
+
+$$A = U \ \Sigma \ V^T$$
+
+```{r full-matrix, echo=FALSE}
+include_graphics("./SVD_full.png")
+```
+
+The matrix $\Sigma$ is a diagonal matrix, with values representing the singular values by which $A$ can be decomposed.  As these values decrease, continued calculation of $A$ using these values does not provide a useful return on computing power.  By determining the number of singular values $k$ at which this point of diminishing returns occurs, the matrices can be reduced in size; their product can be used to closely approximate $A$ with less computational expense.
+
+$$A \approx U_k \ \Sigma_k \ V^T_k$$
+
+```{r approx-matrix, echo=FALSE}
+include_graphics("./SVD_approx.png")
+```
+
+The image above represents the dimensionality reduction in the matrices $U$, $\Sigma$, and $V^T$ used to represent $A$.  In cases where $k$ is much less than $N$, this can result in signifcant computational savings.
+
+
+## Estimating Similarity with SVD
+In previous exercises using the same dataset, it has been [shown](https://http://rpubs.com/dsmilo/DATA643-Project1) that `recommenderlab` conveniently packages a number of recommender system algorithms and similarity measures; [investigation](https://http://rpubs.com/dsmilo/DATA643-Project2) of these algorithms showed that user-based collaborative filtering using cosine similarity provides accurate recommendations.
+
+While the pre-packaged methods provide good recommendations, they can be computationally heavy.  Given that this challenge is encountered with this dataset, which only has 500,000 entries, a method to reduce the amount of computation required will be useful for handling larger datasets.  By identifying the singular values by which the ratings can be described, SVD can lighten the computational requirements; it is hoped that this is accomplished with minimal sacrifice of accuracy.
+
+
+### Performing the SVD
+The data in the `Jester5k` dataset are normalized and fed to the `svd` function of base R, which returns a list of three items: `u`, the matrix $U$; `v`, the matrix $V^T$; and `d`, the singular values that make up the diagonal of $\Sigma$.
+```{r user-svd}
+Jester5k_norm <- normalize(Jester5k)
+jester_svd <- svd(Jester5k_norm@data)
+Sigmak <- jester_svd$d; Uk <- jester_svd$u; Vk <- t(as.matrix(jester_svd$v))
+```
+
+To estimate the value of $k$, the cumulative proportion of the length of the vector `d` represented by the set of items running through an index `n` is calculated and plotted.  The values of `n` at which 80% and 90% of the vector's length is included are found and plotted:
+```{r plot-user-svd, echo=FALSE, fig.width=8}
+norm_Sigma <- sqrt(sum(Sigmak^2, na.rm = TRUE))
+frac_norm <- NULL
+
+for (i in 1:length(Sigmak)) {
+  frac_norm[i] <- sqrt(sum(Sigmak[1:i]^2, na.rm = TRUE)) / norm_Sigma
+}
+
+library(ggplot2)
+qplot(x = 1:100, y = frac_norm, geom = "line") + 
+  geom_hline(yintercept = 0.8, lty = 2, col = 'green4') + 
+  geom_vline(xintercept = min(which(x = frac_norm > 0.8)), lty = 3, col = "green4") + 
+  geom_hline(yintercept = 0.9, lty = 2, col = 'red4') + 
+  geom_vline(xintercept = min(which(x = frac_norm > 0.9)), lty = 3, col = "red4") + 
+  scale_x_continuous('') + scale_y_continuous('') + theme_bw()
+
+k <- min(which(x = frac_norm > 0.8))
+```
+
+80% of the length of $\Sigma$ is captured in the first 35 singular values; 90% is captured in the first 57 singular values.  The over 60% increase in computation required is not likely worth the 12.5% increase in accuracy in most cases.  For this reason, the value $k = 35$ is used.
+```{r shrink-user-svd}
+Sigmak <- Diagonal(x = Sigmak[1:k])
+Uk <- Uk[, 1:k]
+Vk <- Vk[, 1:k]
+```
+
+### Applying the SVD
+The ratings matrix $R$ can now be approximated using the reduced matrices:
+
+$$R \approx (U_k \ \sqrt{\Sigma_k}^T) (\sqrt{\Sigma_k} \ V^T_k)$$
+
+This calculation is executed, and the resulting `dgeMatrix` is converted to a standard matrix.  Bounds are added to enforce the range of the original scores -- the rating scale is between -10 and 10, but actual ratings range between -9.95 and 9.9.
+```{r user-ratings}
+R <- Uk %*% t(sqrt(Sigmak)) %*% sqrt(Sigmak) %*% t(Vk)
+R@Dimnames <- Jester5k@data@Dimnames
+R <- as(R, "matrix")
+
+for (i in 1:nrow(R)) {
+  for (j in 1:ncol(R)) {
+    R[i, j] <- ifelse(R[i, j] < -9.95, -9.95,
+                      ifelse(R[i, j] > 9.9, 9.9,
+                             R[i, j]))
+  }
+}
+```
+
+
+
+### Evaluating the Ratings
+The predicted and actual ratings are vizualized to allow for quick comparison:
+```{r raster-plots, echo=FALSE}
+library(reshape2)
+ggplot(melt(R), aes(Var1, Var2, fill = value)) + geom_raster() + scale_fill_gradientn(colours=c("#0000FFFF","#FFFFFFFF","#FF0000FF"), name = 'Rating') + scale_x_discrete("Users", breaks = NULL, labels = NULL) + scale_y_discrete("Items", breaks = NULL, labels = NULL) + theme(legend.position = 'bottom') + ggtitle('Approximated Ratings')
+
+jester_matrix <- matrix(as.vector(Jester5k@data), nrow = Jester5k@data@Dim[1], ncol = Jester5k@data@Dim[2])
+
+ggplot(melt(jester_matrix), aes(Var1, Var2, fill = value)) + geom_raster() + scale_fill_gradientn(colours=c("#0000FFFF","#FFFFFFFF","#FF0000FF"), name = 'Rating') + scale_x_discrete("Users", breaks = NULL, labels = NULL) + scale_y_discrete("Items", breaks = NULL, labels = NULL) + theme(legend.position = 'bottom') + ggtitle('Actual Ratings')
+```
+
+It is clear from these images that the approximated ratings failed to accurately capture strong user sentiment -- the colors in the actual ratings are more frequently brightly colored, indicating scores closer to 10 or -10.  This is likely due to the handling of missing values.  The original `Jester5k` dataset has a (low) level of sparsity -- not every user has rated every joke.  In the original dataset, these instances are noted as representing a lack of arating, but when the dataset was fed to the `svd` function, these instances were converted to values of 0.  The introduction of ratings of 0 for any non-rating will naturally bias the ratings towards zero.
+
+In an attempt to combat this introduction of bias, the SVD was carried out with the `Jester_norm` dataset stored as a `sparseMatrix` class from the `Matrix` package.  Additionally, the `irlba` package was introduced to investigate an alternative approach to SVD in R.  Both of these attempted solutions still intoduced a bias towards zero (with the `irlba` approximation performing worse than the original presented above).  Because of this, the code for these solutions is withheld.
+
+In order to allow for direct comparison with the actual ratings, the sparsity in the original dataset is reintroduced by converting missing values in the original dataset to `NA` in the estimated ratings.  Additionally, the approximated ratings are converted to the `realRatingMatrix` class to match the original data class.  The accuracy of the predicted ratings is then calculated.
+```{r sparsity}
+for (i in 1:nrow(R)) {
+  for (j in 1:ncol(R)) {
+    R[i, j] <- ifelse(jester_matrix[i, j] == 0, NA, R[i, j])
+  }
+}
+
+R <- as(R, "realRatingMatrix")
+calcPredictionAccuracy(x = R, data = normalize(Jester5k), byUser = FALSE)
+```
+
+The RMSE returned by this fit is then compared to a user-based collaborative filtering system with the default cosine similarity using k-fold cross-validation.
+```{r UBCF}
+eval_sets <- evaluationScheme(data = Jester5k, method = "cross-validation",
+                              k = 4, given = 15, goodRating = 1)
+
+eval_recommender <- Recommender(data = getData(eval_sets, "train"),
+                                method = "UBCF", parameter = NULL)
+
+eval_prediction <- predict(object = eval_recommender,
+                           newdata = getData(eval_sets, "known"),
+                           n = 10, type = "ratings")
+
+calcPredictionAccuracy(x = eval_prediction, data = getData(eval_sets, "unknown"), byUser = FALSE)
+```
+
+The lower RMSE shows that a collaborative filtering model is more effective at predicting ratings than using SVD to predict the same ratings, even with SVD having the advantage of not withholding data for a testing set.  While this may be improved with a larger value of $k$, it is more interesting to investigate other applications of SVD for recommender systems.
+
+
+## Creating a Content-Based Recommender
+For items that are not pre-classified into categories, it is useful to develop a method for determining users' affinities for items of certain characteristics.  For the `Jester5k` dataset, this can be accomplished by mining the text of the actual jokes in the dataset, which are stored in the `JesterJokes` dataset that loads alongside `Jester5k`.  This text mining is done using the `tm` package, first by creating a corpus for each joke and then merging the corpora into a master corpus:
+```{r corpus}
+library(tm)
+joke_corpus <- Corpus(VectorSource(JesterJokes[1]))
+
+for(i in 2:ncol(Jester5k)) {
+  tmp_corpus <- Corpus(VectorSource(JesterJokes[i]))
+  joke_corpus <- c(joke_corpus, tmp_corpus)
+}
+```
+
+With the corpus created, a document-term matrix is created to determine the importance of each term for each joke -- this serves as a way of creating categories and assigning each joke a rating in each category.  Term frequency-inverse document frequency (tf_idf) weighting is used; this weighting adjusts for the fact that certain words appear more often by offsetting the frequency of a term's appearance in a joke by the frequency of the term in the overall corpus.
+```{r dtm}
+dtm <- DocumentTermMatrix(joke_corpus, 
+                          control = list(removePunctuation = TRUE,
+                                         removeNumbers = TRUE,
+                                         stopwords = TRUE,
+                                         tolower = TRUE,
+                                         weighting = weightTfIdf))
+
+dtm_matrix <- as.matrix(dtm)
+dimnames(dtm_matrix)$Docs <- Jester5k@data@Dimnames[[2]]
+```
+
+The document-term matrix contains 1433 terms; the use of this matrix to create a content-based system would be quite complex.
+
+
+### SVD on Content
+Performing singular value decompoistion on the document-term matrix and identifying appropriate decreases in matrix rank may provide a more practical approach.  Due to issues with the standard `svd` function, the `irlba` function is used to perform the SVD.
+
+```{r term-svd}
+library(irlba)
+term_svd <- irlba(dtm_matrix, nv = 99, maxit = 100)
+Sigmak <- term_svd$d; Uk <- term_svd$u; Vk <- t(as.matrix(term_svd$v))
+```
+
+As before, the number of singular values needed to capture 80% of the length of $\Sigma$ is determined.
+```{r plot-term-svd, echo=FALSE, fig.width=8}
+norm_Sigma <- sqrt(sum(Sigmak^2, na.rm = TRUE))
+frac_norm <- NULL
+
+for (i in 1:length(Sigmak)) {
+  frac_norm[i] <- sqrt(sum(Sigmak[1:i]^2, na.rm = TRUE)) / norm_Sigma
+}
+
+k <- min(which(x = frac_norm > 0.8))
+```
+
+For this SVD, 80% of the length of $\Sigma$ is captured in the first 33 singular values; this is used as the value of $k$.
+```{r shrink-term-svd}
+Sigmak <- Diagonal(x = Sigmak[1:k])
+Uk <- Uk[, 1:k]
+Vk <- Vk[, 1:k]
+```
+
+### Creating the Recommender System
+The reduced matrix $U^T$ can be used as the basis for a content-based recommender system.  The columns of the matrix represent the 100 jokes, the rows represent the 33 singular values, and the values represent the assigned score of each singular value.  The singular values can be used to represent categories in this case.
+
+```{r joke_cat}
+joke_cat <- as.matrix(t(Uk))
+dimnames(joke_cat) <- list(SVs = paste0("sv", 1:33), Jokes = paste0("j", 1:100))
+```
+
+With the matrix of joke-category scores created, a similar matrix of users and categories can be created.  First, a mean-centered matrix with sparse values removed must be created.
+```{r user_cat}
+jester_cat <- as.vector(Jester5k_norm@data)
+jester_cat <- ifelse(jester_cat == 0, NA, jester_cat)
+jester_cat <- matrix(jester_cat, nrow = 5000, ncol = 100)
+
+user_cat <- matrix(nrow = 5000, ncol = 33)
+for (i in 1:5000) {
+  for (j in 1:33) {
+    user_cat[i, j] <- sum(jester_cat[i, ] * joke_cat[j, ], na.rm = TRUE) / sum(joke_cat[j, ] != 0)
+  }
+}
+```
+
+Now that the joke-category and user-category matrices have been created, they can be used to estimate users' ratings for unrated movies.
+
+```{r category-ratings}
+est_ratings <- matrix(nrow = 5000, ncol = 100)
+for (i in 1:nrow(est_ratings)) {
+  for (j in 1:ncol(est_ratings)) {
+    if (is.na(jester_cat[i, j])) {
+      numerator <- 0
+      denominator <- 1
+      for (k in 1:nrow(joke_cat)) {
+        numerator <- numerator + user_cat[i, k] * joke_cat[k, j]
+        denominator <- denominator * 
+          sqrt(sum(user_cat[i, ]^2, na.rm = TRUE)) * 
+          sqrt(sum(joke_cat[, j]^2, na.rm = TRUE))
+      }
+      est_ratings[i, j] <- numerator / denominator
+    } else{est_ratings[i, j] <- NA}
+  }
+}
+
+summary(as.vector(est_ratings))
+```
+
+The very wide range of the estimated ratings indicates that something is wrong -- the largest a rating can differ from a user's mean rating is $\pm$ 20.  This is likely due to the scale of the category matrices.  Unfortunately, attempts to modify this scaling to make the predicted ratings acceptable were unsuccessful.
+
+#### Next Steps
+Although outside the scope of this exercise, the scale of predicted ratings using this content-based model should be investigated.  It is possible that, although computationally expensive, using the document term matrix (without SVD) may prove more successful.
