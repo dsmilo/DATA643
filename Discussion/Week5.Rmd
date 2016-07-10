@@ -16,7 +16,7 @@ The mission statement includes the phrase _"you get access to"_ -- this indicate
 While LinkedIn provides recommendations for jobs, companies, and public figures, this discussion is focused on the recommendations of users.  LinkedIn provides a "People You May Know" feature which recommends people that a given user may wish to connect with based upon mutual connections.  A screenshot of this feature from my account is presented below:
 
 ```{r echo=FALSE, fig.align='center'}
-knitr::include_graphics('./PeopleYouMayKnow.PNG')
+knitr::include_graphics('https://raw.githubusercontent.com/dsmilo/DATA643/master/Discussion/PeopleYouMayKnow.PNG')
 ```
 
 For each of the four people displayed, a small icon illustrates how many connections in common I share with the given person.  While this is not always the case, I know three of the four people at the top of the recommended users.  I know Sam and Jeremy through my personal life, and Kayla through my job; this may explain the large difference in the number of shared connections.  I do not know Barbara, but she works at the same company as me in a job with a good deal of exposure outside the company -- this is probably why we have so many mutual connections.
@@ -24,7 +24,7 @@ For each of the four people displayed, a small icon illustrates how many connect
 In addition to the "People You May Know" feature, LinkedIn provides information about people that a user is not connected to, illustrating the level of separation between them and the person.  One such example is viewing the list of most-viewed people at a company:
 
 ```{r echo=FALSE, fig.align='center'}
-knitr::include_graphics('./MostViewed.PNG')
+knitr::include_graphics('https://raw.githubusercontent.com/dsmilo/DATA643/master/Discussion/MostViewed.PNG')
 ```
 
 Next to each person in the list is an ordinal number -- this indicates the [degrees](https://www.linkedin.com/help/linkedin/topics/6096/6108/110/your-network-and-degrees-of-connection?lang=en) of separation between me and the person:
@@ -36,7 +36,7 @@ Next to each person in the list is an ordinal number -- this indicates the [degr
 Clearly this approach is based on mapping a network -- not all that different from the mapping of the "Bacon number" exercise in the Neo4j example:
 
 ```{r echo=FALSE, fig.align='center'}
-knitr::include_graphics('./MovieGraph.png')
+knitr::include_graphics('https://raw.githubusercontent.com/dsmilo/DATA643/master/Discussion/MovieGraph.png')
 ```
 
 I imagine that the recommendations offered in "People You May Know" are developed by exploring users' networks, identifying users that they are not connected with, and ranking the unknown users by strength -- this may be based on a combination of connections shared and any other number of context-based items: total connections, level of activity, industry, job title, or many others.  Performing these recommendations allow users to reach their goals of expanding their professional network (as reflected in the company mission statement).
