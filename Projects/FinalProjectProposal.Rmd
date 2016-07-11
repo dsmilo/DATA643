@@ -1,0 +1,25 @@
+---
+title: "DATA 607 Final Project Proposal"
+author: "Dan Smilowitz"
+date: "July 10, 2016"
+output: html_document
+---
+
+## Project Purpose
+This system will identify energy services products that customers will be likely to be interested in.  These services include a wide array of products, ranging from lightweight facility audits to large-scale capital equipment upgrades and replacements.
+
+### Business Goals
+The purpose of this system is to aid the business development, marketing, and energy service implementation teams in their pursuit of customer projects.  Due to limited staff bandwidth, optimizing resources in marketing projects most likely to be implemented by customers will represent a significant savings to the company.
+
+### Audience
+The audience of the system is customers of the New York Power Authority, my employer.  The Authority has the legislative authority to provide energy services to a wide range of customer types.  These customer groups, which may influence customer preference, include:
+  * State & federal agencies, authorities, and organizations
+  * Local governments including cities, towns, villages, and counties
+  * Rural municipalities and cooperatives operating their own utilities
+  * Businesses and not-for profits receiving electric supply from the Authority
+
+## Data Sources
+The data used to create the system will be drawn from information housed by the company related to previous energy services work.  This data is contained in a number of systems, and includes detailed information about project timelines, costs, and types.  All data will be anonymized for the purposes of this academic exercise, but records of the anonymization will be separately stored to make the data useful to the organization.
+
+### Context
+The entities served by the Power Authority are located across New York State.  The location of implemented projects, as stored in the above data source description, will be used to provide a weighting of items in the system.
