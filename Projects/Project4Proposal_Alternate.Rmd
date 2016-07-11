@@ -1,0 +1,22 @@
+---
+title: "DATA 607 Project 4 Proposal -- Alternate"
+author: "Dan Smilowitz"
+date: "July 11, 2016"
+output: html_document
+---
+
+## Project Purpose
+This system will recommend movies to users based upon collaborative filtering and their location.
+
+### Business Goals
+The purpose of the system is to provide users of the [MovieLens](https://movielens.org/) website with recommendations for movies based upon their previously-established ratings.  By providing useful recommendations, the business is more likely to gain return business, which can lead to increased revenue (largely from ads).
+
+### Audience
+The audience of the system is fans of movies looking to discover yet-unseen movies that they will like based upon their documented preferences.  As stated above, if the audience receives useful recommendations, they are more likely to continue using the site.
+
+
+## Data Sources
+This system will utilize the MovieLens ratings matrix.  The version of the MovieLens 100k dataset included in the `recommenderlab` package may be utilized, or a source of different size of MovieLens data may be used.  It is possible that the system built will begin with an implemented system from *Building a Recommendation System with R* (Gorakala & Usuelli).
+
+### Context
+A collaborative filtering system for movie recommendations will be supplemented with weighting based upon user location.  Closest neighbors based upon zip codes provided for each user will be used to generate user weights that will modify user-based collaborative filtering methods.
