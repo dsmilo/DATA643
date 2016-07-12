@@ -1,0 +1,104 @@
+---
+title: "DATA 643 Project 4: Context-Based Recommendation"
+author: "Dan Smilowitz"
+date: "July 14, 2016"
+output: 
+  html_document: 
+    highlight: tango
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, comment=NA, fig.align='center')
+```
+
+## Motivation
+The purpose of this exercise is to add context to a recommender system.  This will be completed by incorporating an aspect of time into the ratings developed by the system.
+
+### Data Utilized
+The `recommenderlab` package is utilized throughout the exercise.  The `MovieLense` dataset included in the package is the rating matrix on which model is evaluated.  The dataset includes "about 100,000 ratings (1-5) from 943 users on 1664 movies."  When the dataset is loaded, an additional dataset, `MovieLenseMeta`, is also loaded -- it contains information about the movie's release and genre.
+
+```{r load-data, echo=FALSE}
+library(recommenderlab)
+data(MovieLense, package = "recommenderlab")
+```
+
+## Creating the Recommender System
+An item-based collaborative filtering (IBCF) system is created to provide the top 20 recommendations for a testing set consisting of 20% of the total dataset.  The dataset is first subset to contain only users with at least 20 movies reviewed and movies with at least 50 reviews.  The system is a modfication of a system developed in Chapter 3 of *Building a Recommendation System with R* (Gorakala & Usuelli):
+```{r build-system}
+ratings_movies <- MovieLense[rowCounts(MovieLense) > 20, colCounts(MovieLense) > 50]
+
+set.seed(42)
+which_set <- sample(x = 1:5,
+                    size = nrow(ratings_movies),
+                    replace = TRUE)
+for(i_model in 1:5) {
+  which_train <- which_set == i_model
+  recc_data_train <- ratings_movies[which_train, ]
+  recc_data_test <- ratings_movies[!which_train, ]
+}
+
+recc_model <- Recommender(data = recc_data_train, method = "IBCF")
+
+recc_predicted <- predict(object = recc_model, newdata = recc_data_test, n = 20)
+```
+
+The `recc_predicted` object, which is of class `topNList`, contains the 20 top-recommended items for the 719 users in the test dataset.  It has four slots: the items (by index); the predicted ratings; the names associated with the indices; and the number of recommendations $n$.
+
+## Determining Context
+Context is added to the system by recommending *recent* movies to users.  Using the `MovieLenseMeta` data frame, the year for each movie by name can be extracted.  The number of years since the movie came out can also be calculated by extracting the latest year in the data frame:
+```{r get-years}
+year_ref <- max(MovieLenseMeta$year, na.rm = TRUE)
+year_diff <- year_ref - MovieLenseMeta$year
+```
+
+### Assigning Weights
+In order to use the age of the films stored in `year_diff` to incorporate context into the ratings, a method for weighting must be determined.  Since a recent movie is the goal, the highest weight should be assigned to movies released in the current year.  Movies should be punished in their weighting severely for age quickly.  For this reason, a $\dfrac{1}{\log}$ relationship is desired.
+
+The ratings may be more intuitive if movies are simply punished for age, rather than also being rewarded for recency -- for this reason, movies released in the current year should be assigned a weight of 1.  After experimentation, the following equation is decided upon for calculating the weight: 
+$$w = \dfrac{1}{\log (year\_diff + e)}$$
+
+The change in weights over years can be seen in the plot below:
+```{r wt-plot, echo=FALSE}
+library(ggplot2)
+yrs <- as.numeric(levels(as.factor(year_diff)))
+wts <- 1 / log(yrs + exp(1))
+qplot(data = data.frame(cbind(yrs, wts)), x = yrs, y = wts, geom = "line", xlab = "Age (years)", ylab = "w",  main = "Contextual Weight by Age")
+```
+
+This plot shows that there is a sharp drop in weights which eventually slows in its decay -- this is sensible, as for a user looking for recent movies, the difference between a 20-year-old movie and a 25-year-old movie is far less signifcant than the difference between a 1-year-old movie and a 6-year-old movie.  As such, this weighting is implemented:
+
+```{r weights}
+year_wt <- 1 / log(year_diff + exp(1))
+year_wt[is.na(year_wt)] <- 0
+weights <- data.frame(title = MovieLenseMeta$title, wt = year_wt, stringsAsFactors = FALSE)
+```
+
+## Implementing Context
+With the weights determined for each movie based upon its age, the contextual element of the recommender is implemented.  First, the set of recommendations in `recc_predicted` are extracted to a data frame:
+```{r resultsdf}
+recc_df <- data.frame(user = sort(rep(1:length(recc_predicted@items), recc_predicted@n)), rating = unlist(recc_predicted@ratings), index = unlist(recc_predicted@items))
+recc_df$title <- recc_predicted@itemLabels[recc_df$index]
+```
+
+By matching the titles of the recommended movies to the data frame containing weights, a weighted rating is obtained.  This set of ratings is limited to the top five recommendations for each user.  The top 5 rated movies for the first two users are extracted.
+```{r weighted-recs}
+library(dplyr)
+recc_wt <- inner_join(recc_df, weights, by = "title")
+
+recc_wt <- recc_wt %>% mutate(wt_rating = rating * wt) %>% group_by(user) %>% arrange(desc(wt_rating)) %>% select(user, title, wt_rating) %>% top_n(5)
+```
+
+`r kable(head(recc_wt, 13), digits = 3, padding = 0)`
+
+It can be seen that the top-rated movies for both of the first two users come from the first two years prior to the reference year.  While the model returns the top 5 recommendations for each user, user 1 had a four-way tie for first-rated movie and a four-way tie for fifth-rated movie.
+
+These results are compared to the results from the original, unweighted top five:
+```{r unweighted-top, echo=FALSE}
+recc_df2 <- recc_df %>% group_by(user) %>% arrange(desc(rating)) %>% select(user, title, rating) %>% top_n(5, rating)
+
+kable(head(recc_df2, 24), digits = 3, padding = 0)
+```
+
+This comparison shows the impact of the contextual weighting -- user 1 had 19 movies with an expected rating of 5.0, ranging in year from 1958 to 1997, but the addition of weighting based on time removed many of these movies from the top five while elevating newer movies with slightly lower unweighted predicted ratings.  Similarly, only one of the top five recommendations for user 2 without weighting remained once the element of time was added to the system.
