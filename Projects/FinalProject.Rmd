@@ -75,7 +75,7 @@ raw_projects <- subset(raw_projects, strCustomerType != "NYPA" & Physical_Zip_Co
 ```
 
 ### Data Anonymization {-}
-The sensitive nature of the customer data used in this system is rather sensitive; as such, it must be anonymized for the data to be publically shareable.  A function is created to anonymize the Company ID field from Primavera, as it is the only identifying characteristic in the query results.  The raw csv loaded is not made publicly available for this reason.  Though not used for this report, a function is also created to de-anonymize the data to allow for utilization within NYPA.
+The nature of the customer data used in this system is rather sensitive; as such, it must be anonymized for the data to be publically shareable.  A function is created to anonymize the Company ID field from Primavera, as it is the only identifying characteristic in the query results.  The raw csv loaded is not made publicly available for this reason.  Though not used for this report, a function is also created to de-anonymize the data to allow for utilization within NYPA.
 
 ```{r anonymize-function}
 set.seed(getOption("letter_seed"))
@@ -108,7 +108,7 @@ raw_projects <- raw_projects %>%
 
 
 ## Data Storage
-As the system will be implemented in Apache Spark, the anonymized dataframe is saved to a JSON file, which will be used for further analysis and is available on [GitHub](https://www.github.com/dsmilo/DATA643/Projects/all_projects.json).
+As the system will be implemented in Apache Spark, the anonymized dataframe is saved to a JSON file, which will be used for further analysis and is available on [GitHub](https://raw.githubusercontent.com/dsmilo/DATA643/master/Projects/all_projects.json).
 
 ```{r json-export}
 library(jsonlite)
