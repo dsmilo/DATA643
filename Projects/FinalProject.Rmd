@@ -63,7 +63,7 @@ ON Primavera_Accounts.strCompanyID = Primavera_Project.strCompanyID;
 
 
 ## Data Cleansing
-The results from the query shown above are exported and stored as a csv file.  The `Physical_Zip_Code` has some values that contain the "plus 4" digits after the zip code; these are removed for consisteny.  One zip code contained in the file (11057) is not a valid US zip code; as such, projects containing this zip code are removed.  Finally, projects at NYPA's own facilities are removed.
+The results from the query shown above are exported and stored as a csv file.  The `Physical_Zip_Code` has some values that contain the "plus 4" digits after the zip code; these are removed for consistency.  One zip code contained in the file (11057) is not a valid US zip code; as such, projects containing this zip code are removed.  Finally, projects at NYPA's own facilities are removed.
 
 ```{r cleansing}
 raw_projects <- read.csv('./AllProjects.csv', stringsAsFactors = FALSE)
@@ -75,7 +75,7 @@ raw_projects <- subset(raw_projects, strCustomerType != "NYPA" & Physical_Zip_Co
 ```
 
 ### Data Anonymization {-}
-The nature of the customer data used in this system is rather sensitive; as such, it must be anonymized for the data to be publically shareable.  A function is created to anonymize the Company ID field from Primavera, as it is the only identifying characteristic in the query results.  The raw csv loaded is not made publicly available for this reason.  Though not used for this report, a function is also created to de-anonymize the data to allow for utilization within NYPA.
+The nature of the customer data used in this system is rather sensitive; as such, it must be anonymized for the data to be publicly shareable.  A function is created to anonymize the Company ID field from Primavera, as it is the only identifying characteristic in the query results.  The raw csv loaded is not made publicly available for this reason.  Though not used for this report, a function is also created to de-anonymize the data to allow for utilization within NYPA.
 
 ```{r anonymize-function}
 set.seed(getOption("letter_seed"))
@@ -161,7 +161,7 @@ In the created user-item matrix, the ratings in the cells of the matrix represen
 
 
 ## Determining Similarity
-The ratings matrix contains 166 users and 21 items, as vizualized below:
+The ratings matrix contains 166 users and 21 items, as visualized below:
 ```{r plot-ratingtable, echo=FALSE}
 library(reshape)
 library(ggplot2)
@@ -244,7 +244,7 @@ zip_coords <- data.frame(zip, lat, lng, stringsAsFactors = FALSE)
 ```
 
 #### Calculating Distances {-}
-With the coordinates retrieved, it is possible to calulate the distance between customers in miles.  Given the distances being addressed since all locations are within New York State, an approximation can be made that a difference in $\theta$ degrees corresponds to $\frac{\theta}{360}$ percent of the Earth's circumference.  A function is created to calculate this distance given two pairs of coordinates, calculating equitorial and meridional distances separately:
+With the coordinates retrieved, it is possible to calculate the distance between customers in miles.  Given the distances being addressed since all locations are within New York State, an approximation can be made that a difference in $\theta$ degrees corresponds to $\frac{\theta}{360}$ percent of the Earth's circumference.  A function is created to calculate this distance given two pairs of coordinates, calculating equatorial and meridional distances separately:
 
 ```{r dist-function}
 dist_mile <- function(lat1, lng1, lat2, lng2) {
@@ -407,7 +407,7 @@ It can be seen from the second plot that items with only a small number of user 
 
 
 ## Tabulated Results
-Predicted ratings are presented below for the revised model are presented below.  As seen in the second plot above, there are a number of `NA` ratings due to insufficent ratings for certain user-item pairs; these are excluded for clarity.
+Predicted ratings are presented below for the revised model are presented below.  As seen in the second plot above, there are a number of `NA` ratings due to insufficient ratings for certain user-item pairs; these are excluded for clarity.
 
 ```{r results-table, echo=FALSE}
 library(DT)
@@ -431,7 +431,7 @@ This RMSE of `r round(RMSE, 3)` is a bit high, but may be satisfactory given the
 
 
 # Conclusions
-This recommendation system provides adequate recommendations for customers of the New York Power Authority for energy services products.  Implementation of a version of this system can be used to aid in the allocation of resources of NYPA's business and project development teams.  The inclusion of the context of location in the evalution of the system can allow for proper resource allocation across regions of the state.  Given the sparse nature of adoption of some project categories, this system may not be well-suited to predict all categories, as predicted ratings for these categories are skewed by the high ratings present in the one to two adopters.
+This recommendation system provides adequate recommendations for customers of the New York Power Authority for energy services products.  Implementation of a version of this system can be used to aid in the allocation of resources of NYPA's business and project development teams.  The inclusion of the context of location in the evaluation of the system can allow for proper resource allocation across regions of the state.  Given the sparse nature of adoption of some project categories, this system may not be well-suited to predict all categories, as predicted ratings for these categories are skewed by the high ratings present in the one to two adopters.
 
 ## Future Improvements
 In order to gain more accurate representations of predicted customer project adoption, improvements are envisioned in four different paths.  These improvements will allow for a more useful and more easily-adoptable system.
@@ -454,7 +454,7 @@ CRM tracks all customer communications, including the text of email communicatio
     
 
 ### Creation of a Logistic Regression System {-}
-With the inclusion of additional data, as outlined above, the computational power required to implement a system may become taxing if a similarity matrix is to be created for each additional data dimension considered.  By binarizing the ratings (customer implemented vs. did not implement a project), a logistic regression model can be developed to predict the probability of a customer adopting a future project.  This would allow for the consideration of many quantiative and qualitative variables into an easy-to-understand predicted rating.
+With the inclusion of additional data, as outlined above, the computational power required to implement a system may become taxing if a similarity matrix is to be created for each additional data dimension considered.  By binarizing the ratings (customer implemented vs. did not implement a project), a logistic regression model can be developed to predict the probability of a customer adopting a future project.  This would allow for the consideration of many quantitative and qualitative variables into an easy-to-understand predicted rating.
 
 Such a regression system could be used in combination with a user-based collaborative filtering model to account not only for customer-specific bases for decision, but the effect of similar customers' behaviors.  This is especially relevant as many of NYPA's customers belong to public or industry associations and may be strongly influenced by the behavior of similar customers.
 
